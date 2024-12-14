@@ -19,16 +19,24 @@ driver = GraphDatabase.driver(
 
 @app.route('/api/universities')
 def get_universities():
-    with driver.session() as session:
-        # result = session.run('MATCH (u:University) RETURN u.UniversityName, u.geoPoint')
-        # universities = [{
-        #     'name': record['u.UniversityName'],
-        #     'point': record['u.geoPoint']
-        # } for record in result]
-        # return jsonify(universities)
-        result = session.run('MATCH (u:University) RETURN u')
-        universities = [dict(record["u"]) for record in result]
-        return jsonify(universities)
+   uni_id = request.args.get('id', '')
+   name = request.args.get('name', '')
+
+   query = '''
+   MATCH (u:University)
+   WHERE
+       (SIZE($id) = 0 OR u.UniversityID = $id) AND
+       (SIZE($name) = 0 OR u.UniversityName CONTAINS $name)
+   RETURN u
+   '''
+
+   with driver.session() as session:
+       result = session.run(query, {
+           'id': uni_id,
+           'name': name
+       })
+       universities = [dict(record["u"]) for record in result]
+       return jsonify(universities)
 
 @app.route('/api/students')
 def get_students():
