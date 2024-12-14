@@ -1,4 +1,7 @@
-from flask import Flask, jsonify
+# Install these lib before running
+# pip install flask flask-cors neo4j-python-driver shapely
+
+from flask import Flask, request, jsonify
 from neo4j import GraphDatabase
 from flask_cors import CORS
 import json
@@ -29,16 +32,30 @@ def get_universities():
 
 @app.route('/api/students')
 def get_students():
+    email = request.args.get('email', '')
+    phone = request.args.get('phone', '')
+    student_id = request.args.get('id', '')
+    name = request.args.get('name', '')
+
+    query = '''
+    MATCH (s:Student)
+    WHERE
+        (SIZE($email) = 0 OR s.Email CONTAINS $email) AND
+        (SIZE($phone) = 0 OR s.PhoneNumber CONTAINS $phone) AND
+        (SIZE($id) = 0 OR s.StudentID = $id) AND
+        (SIZE($name) = 0 OR s.StudentName CONTAINS $name)
+    RETURN s
+    '''
+
     with driver.session() as session:
-        result = session.run('MATCH (s:Student) RETURN s')
+        result = session.run(query, {
+            'email': email,
+            'phone': phone,
+            'id': student_id,
+            'name': name
+        })
         students = [dict(record["s"]) for record in result]
         return jsonify(students)
-
-@app.route('/api/taiwan-regions')
-def get_taiwan_regions():
-    # Load the GeoJSON data
-    with open('tw.json', 'r') as f:
-        return jsonify(json.load(f))
 
 @lru_cache()
 def load_regions():
@@ -53,11 +70,11 @@ def load_regions():
 def get_students_by_region():
     try:
         regions = load_regions()
-        
+
         with driver.session() as session:
             result = session.run("MATCH (s:Student) RETURN s.geoPoint as point")
             student_counts = {name: 0 for name in regions.keys()}
-            
+
             for record in result:
                 point_data = record["point"]
                 if point_data:
@@ -65,7 +82,7 @@ def get_students_by_region():
                         # Parse Neo4j point format
                         coords = str(point_data).replace('POINT(', '').replace(')', '').split()
                         pt = Point(float(coords[0]), float(coords[1]))
-                        
+
                         for region_name, region_shape in regions.items():
                             if region_shape.contains(pt):
                                 student_counts[region_name] += 1
@@ -73,7 +90,7 @@ def get_students_by_region():
                     except Exception as e:
                         print(f"Point error: {e}, point: {point_data}")
                         continue
-                        
+
             return jsonify(student_counts)
     except Exception as e:
         print(f"Error: {e}")
