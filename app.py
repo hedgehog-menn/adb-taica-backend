@@ -213,23 +213,28 @@ def execute_custom_query():
         if not query:
             return jsonify({"error": "Query is required"}), 400
 
-        write_operations = ['CREATE', 'DELETE', 'REMOVE', 'SET', 'MERGE']
-        if any(op.upper() in query.upper() for op in write_operations):
+        # Only block actual write operations
+        dangerous_operations = ['CREATE', 'DELETE', 'REMOVE', 'MERGE', 'DROP']
+        query_upper = query.upper()
+        if any(op in query_upper.split() for op in dangerous_operations):
             return jsonify({"error": "Write operations are not allowed"}), 403
+
+        def serialize_value(value):
+            if hasattr(value, '__class__'):
+                if value.__class__.__name__ == 'Node':
+                    return dict(value)
+                elif value.__class__.__name__ == 'Date':
+                    return value.isoformat()
+            return value
 
         with driver.session() as session:
             result = session.run(query, params)
             records = []
             for record in result:
-                record_dict = {}
                 if len(record.keys()) == 1 and record[0].__class__.__name__ == 'Node':
                     records.append(dict(record[0]))
                 else:
-                    for key, value in record.items():
-                        if hasattr(value, '__class__') and value.__class__.__name__ == 'Node':
-                            record_dict[key] = dict(value)
-                        else:
-                            record_dict[key] = value
+                    record_dict = {key: serialize_value(value) for key, value in record.items()}
                     records.append(record_dict)
             return jsonify(records)
 
