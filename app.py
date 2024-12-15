@@ -192,11 +192,16 @@ def execute_custom_query():
             result = session.run(query, params)
             records = []
             for record in result:
-                for value in record.values():
-                    if hasattr(value, '__class__') and value.__class__.__name__ == 'Node':
-                        records.append(dict(value))
-                    else:
-                        records.append(value)
+                record_dict = {}
+                if len(record.keys()) == 1 and record[0].__class__.__name__ == 'Node':
+                    records.append(dict(record[0]))
+                else:
+                    for key, value in record.items():
+                        if hasattr(value, '__class__') and value.__class__.__name__ == 'Node':
+                            record_dict[key] = dict(value)
+                        else:
+                            record_dict[key] = value
+                    records.append(record_dict)
             return jsonify(records)
 
     except Exception as e:
