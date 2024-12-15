@@ -173,6 +173,35 @@ def get_satellite_courses():
         courses = [dict(record["c"]) for record in result]
         return jsonify(courses)
 
+# Semester Enrollment
+@app.route('/api/semester-enrollment')
+def get_semester_enrollment():
+    year = request.args.get('year', '')
+    semester = request.args.get('semester', '')
+    
+    if not year or not semester:
+        return jsonify({"error": "Year and semester parameters are required"}), 400
+        
+    semester_id = f"S{year}{semester}"
+    
+    query = '''
+    MATCH (s:Student)-[:ENROLLED_IN]->(e:Enrollment)-[:FOR]->(sem:Semester {SemesterID: $semesterId}),
+         (e)-[:FOR]->(c)
+    RETURN 
+        s.StudentID AS StudentID, 
+        e.EnrollmentID AS EnrollmentID, 
+        e.EnrollmentStatus AS Status, 
+        e.Grade AS Grade,
+        e.StandardizedGPA AS GPA,
+        c.CourseName AS CourseName
+    ORDER BY s.StudentID
+    '''
+    
+    with driver.session() as session:
+        result = session.run(query, {'semesterId': semester_id})
+        enrollments = [dict(record) for record in result]
+        return jsonify(enrollments)
+
 # Custom queries
 @app.route('/api/custom-query', methods=['POST'])
 def execute_custom_query():
