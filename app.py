@@ -163,5 +163,34 @@ def get_satellite_courses():
         courses = [dict(record["c"]) for record in result]
         return jsonify(courses)
 
+# Custom queries
+@app.route('/api/custom-query', methods=['POST'])
+def execute_custom_query():
+    try:
+        data = request.get_json()
+        query = data.get('query')
+        params = data.get('params', {})
+
+        if not query:
+            return jsonify({"error": "Query is required"}), 400
+
+        write_operations = ['CREATE', 'DELETE', 'REMOVE', 'SET', 'MERGE']
+        if any(op.upper() in query.upper() for op in write_operations):
+            return jsonify({"error": "Write operations are not allowed"}), 403
+
+        with driver.session() as session:
+            result = session.run(query, params)
+            records = []
+            for record in result:
+                for value in record.values():
+                    if hasattr(value, '__class__') and value.__class__.__name__ == 'Node':
+                        records.append(dict(value))
+                    else:
+                        records.append(value)
+            return jsonify(records)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
