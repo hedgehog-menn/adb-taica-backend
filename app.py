@@ -65,6 +65,11 @@ def get_students():
         students = [dict(record["s"]) for record in result]
         return jsonify(students)
 
+@app.route('/api/taiwan-regions')
+def get_taiwan_regions():
+    with open('tw.json', 'r') as f:
+        return jsonify(json.load(f))
+
 @lru_cache()
 def load_regions():
     with open('tw.json', 'r') as f:
