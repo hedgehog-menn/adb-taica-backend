@@ -75,6 +75,13 @@ def get_students():
         students = [dict(record["s"]) for record in result]
         return jsonify(students)
 
+@app.route('/api/departments')
+def get_departments():
+    with driver.session() as session:
+        result = session.run('MATCH (d:Department) RETURN d')
+        departments = [dict(record["d"]) for record in result]
+        return jsonify(departments)
+
 @app.route('/api/taiwan-regions')
 def get_taiwan_regions():
     with open('tw.json', 'r') as f:
