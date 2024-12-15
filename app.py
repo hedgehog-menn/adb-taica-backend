@@ -106,15 +106,55 @@ def get_students_by_region():
 
 @app.route('/api/master-courses')
 def get_master_courses():
-    with driver.session() as session:
-        result = session.run('MATCH (c:MasterCourse) RETURN c')
-        courses = [dict(record["c"]) for record in result]
-        return jsonify(courses)
+   course_id = request.args.get('id', '')
+   name = request.args.get('name', '')
+   credit = request.args.get('credit', '')
+   licensing = request.args.get('licensing', '')
+   professor = request.args.get('professor', '')
+
+   query = '''
+   MATCH (c:MasterCourse)
+   WHERE
+       (SIZE($id) = 0 OR c.CourseID = $id) AND
+       (SIZE($name) = 0 OR c.CourseName CONTAINS $name) AND
+       (SIZE($credit) = 0 OR c.Credit = toInteger($credit)) AND
+       (SIZE($licensing) = 0 OR c.LicensingType CONTAINS $licensing) AND
+       (SIZE($professor) = 0 OR c.ProfessorName CONTAINS $professor)
+   RETURN c
+   '''
+
+   with driver.session() as session:
+       result = session.run(query, {
+           'id': course_id,
+           'name': name,
+           'credit': credit,
+           'licensing': licensing,
+           'professor': professor
+       })
+       courses = [dict(record["c"]) for record in result]
+       return jsonify(courses)
 
 @app.route('/api/satellite-courses')
 def get_satellite_courses():
+    course_id = request.args.get('id', '')
+    name = request.args.get('name', '')
+    professor = request.args.get('professor', '')
+
+    query = '''
+    MATCH (c:SatelliteCourse)
+    WHERE
+        (SIZE($id) = 0 OR c.SCourseID = $id) AND
+        (SIZE($name) = 0 OR c.CourseName CONTAINS $name) AND
+        (SIZE($professor) = 0 OR c.ProfessorName CONTAINS $professor)
+    RETURN c
+    '''
+
     with driver.session() as session:
-        result = session.run('MATCH (c:SatelliteCourse) RETURN c')
+        result = session.run(query, {
+            'id': course_id,
+            'name': name,
+            'professor': professor
+        })
         courses = [dict(record["c"]) for record in result]
         return jsonify(courses)
 
