@@ -1,5 +1,6 @@
 # Install these lib before running
-# pip install flask flask-cors neo4j-python-driver shapely
+# pip install flask flask-cors neo4j-driver shapely python-dotenv
+# if using `conda install` change "neo4j-driver" -to-> "neo4j-python-driver"
 
 from flask import Flask, request, jsonify
 from neo4j import GraphDatabase
@@ -7,14 +8,23 @@ from flask_cors import CORS
 import json
 from shapely.geometry import Point, shape
 from functools import lru_cache
+import os
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)
 
+load_dotenv()
+neo4j_uri = os.getenv('NEO4J_URI')
+neo4j_username = os.getenv('NEO4J_USERNAME')
+neo4j_password = os.getenv('NEO4J_PASSWORD')
+
+
 # Update with your Neo4j credentials
 driver = GraphDatabase.driver(
-    'bolt://localhost:7687',
-    auth=('neo4j', '12345678')
+    # 'bolt://localhost:7687',
+    neo4j_uri,
+    auth=(neo4j_username, neo4j_password)
 )
 
 @app.route('/api/universities')
