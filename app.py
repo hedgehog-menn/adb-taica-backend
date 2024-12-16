@@ -335,6 +335,34 @@ def get_course_announcement():
         announcements = [dict(record) for record in result]
         return jsonify(announcements)
 
+@app.route('/api/exam-schedule')
+def get_exam_schedule():
+    course_id = request.args.get('course_id', '')
+    exam_date = request.args.get('exam_date', '')
+
+    query = '''
+    MATCH (exam:Exam)-[:HELD_IN]->(u:University), (exam)-[:FOR_COURSE]->(c)
+    WHERE
+        (SIZE($course_id) = 0 OR c.CourseID = $course_id) AND
+        (SIZE($exam_date) = 0 OR exam.ExamDate = date($exam_date))
+    RETURN 
+        c.CourseID AS CourseID,
+        c.CourseName as CourseName,
+        toString(exam.ExamDate) AS Date,
+        exam.RoomID AS Room,
+        u.UniversityName AS University,
+        u.Address AS Address,
+        u.geoPoint AS geoPoint
+    '''
+
+    with driver.session() as session:
+        result = session.run(query, {
+            'course_id': course_id,
+            'exam_date': exam_date
+        })
+        exams = [dict(record) for record in result]
+        return jsonify(exams)
+
 # Custom queries
 @app.route('/api/custom-query', methods=['POST'])
 def execute_custom_query():
