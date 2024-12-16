@@ -304,6 +304,37 @@ def get_student_credits():
         credits = [dict(record) for record in result]
         return jsonify(credits)
 
+@app.route('/api/course-announcement')
+def get_course_announcement():
+    course_id = request.args.get('id', '')
+    title = request.args.get('title', '')
+    type = request.args.get('type', '')
+    date = request.args.get('date', '')
+
+    query = '''
+    MATCH (course)-[:HAS_ANNOUNCEMENT]->(announcement:NTUCoolLearningResource)
+    WHERE
+        (SIZE($course_id) = 0 OR course.CourseID = $course_id) AND
+        (SIZE($type) = 0 OR announcement.AnnouncementType = $type) AND
+        (SIZE($date) = 0 OR announcement.publishDate = date($date))
+    RETURN 
+        course.CourseID AS CourseID, 
+        course.CourseName AS Course, 
+        announcement.title AS Title, 
+        announcement.AnnouncementType AS Type, 
+        toString(announcement.publishDate) AS Date
+    ORDER BY announcement.publishDate DESC
+    '''
+
+    with driver.session() as session:
+        result = session.run(query, {
+            'course_id': course_id,
+            'type': type,
+            'date': date
+        })
+        announcements = [dict(record) for record in result]
+        return jsonify(announcements)
+
 # Custom queries
 @app.route('/api/custom-query', methods=['POST'])
 def execute_custom_query():
