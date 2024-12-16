@@ -185,29 +185,124 @@ def get_satellite_courses():
 def get_semester_enrollment():
     year = request.args.get('year', '')
     semester = request.args.get('semester', '')
-    
+
     if not year or not semester:
         return jsonify({"error": "Year and semester parameters are required"}), 400
-        
+
     semester_id = f"S{year}{semester}"
-    
+
     query = '''
     MATCH (s:Student)-[:ENROLLED_IN]->(e:Enrollment)-[:FOR]->(sem:Semester {SemesterID: $semesterId}),
          (e)-[:FOR]->(c)
-    RETURN 
-        s.StudentID AS StudentID, 
-        e.EnrollmentID AS EnrollmentID, 
-        e.EnrollmentStatus AS Status, 
+    RETURN
+        s.StudentID AS StudentID,
+        e.EnrollmentID AS EnrollmentID,
+        e.EnrollmentStatus AS Status,
         e.Grade AS Grade,
         e.StandardizedGPA AS GPA,
         c.CourseName AS CourseName
     ORDER BY s.StudentID
     '''
-    
+
     with driver.session() as session:
         result = session.run(query, {'semesterId': semester_id})
         enrollments = [dict(record) for record in result]
         return jsonify(enrollments)
+
+@app.route('/api/university-total-students')
+def get_university_total_students():
+    query = '''
+    MATCH (u:University)-[:REGISTERED_AT]-(sr:StudentRegistration)<-[:HAS_REGISTRATION]-(s:Student)
+    RETURN u.UniversityName AS UniversityName, count(s) AS TotalStudents;
+    '''
+    with driver.session() as session:
+        result = session.run(query)
+        body = [dict(record) for record in result]
+        return jsonify(body)
+
+@app.route('/api/university-student-status')
+def get_university_student_status():
+    # Get filter parameters from request with empty string defaults
+    student_id = request.args.get('student_id', '')
+    student_name = request.args.get('student_name', '')
+    university_name = request.args.get('university', '')
+    registration_status = request.args.get('status', '')
+
+    # Build the WHERE clause dynamically based on provided parameters
+    conditions = []
+    params = {}
+
+    if student_id:
+        conditions.append("s.StudentID = $student_id")
+        params['student_id'] = student_id
+    
+    if student_name:
+        conditions.append("s.StudentName CONTAINS $student_name")
+        params['student_name'] = student_name
+    
+    if university_name:
+        conditions.append("u.UniversityName CONTAINS $university_name")
+        params['university_name'] = university_name
+    
+    if registration_status:
+        conditions.append("sr.RegistrationStatus = $registration_status")
+        params['registration_status'] = registration_status
+
+    # Construct the final query
+    query = '''
+    MATCH (s:Student)-[:HAS_REGISTRATION]->(sr:StudentRegistration)-[:REGISTERED_AT]->(u:University)
+    '''
+
+    if conditions:
+        query += ' WHERE ' + ' AND '.join(conditions)
+
+    query += '''
+    RETURN
+        s.StudentID AS StudentID,
+        s.StudentName AS StudentName,
+        u.UniversityName AS UniversityName,
+        sr.RegistrationStatus AS RegistrationStatus
+    '''
+    with driver.session() as session:
+        result = session.run(query, params)
+        body = [dict(record) for record in result]
+        return jsonify(body)
+
+@app.route('/api/course-approvement')
+def get_course_approvement():
+    query = '''
+    MATCH (mc:MasterCourse)-[:APPROVED_BY]->(approval:Approval)
+    RETURN
+        mc.CourseID AS CourseID,
+        mc.CourseName AS CourseName,
+        approval.CentralOfficeApproval AS CentralOfficeApproval,
+        approval.CommitteeApproval AS CommitteeApproval
+    '''
+    with driver.session() as session:
+        result = session.run(query)
+        body = [dict(record) for record in result]
+        return jsonify(body)
+
+@app.route('/api/student-credits')
+def get_student_credits():
+    student_id = request.args.get('id', '')
+    
+    if not student_id:
+        return jsonify({"error": "id (Student ID) parameter is required"}), 400
+
+    query = '''
+    MATCH (s:Student {StudentID: $student_id})-[:ENROLLED_IN]->(e:Enrollment {EnrollmentStatus: "Completed"})-[:FOR]->(sem:Semester {SemesterID: "S2024F"}),
+        (e)-[:FOR]->(c)
+    RETURN 
+        s.StudentID AS StudentID,
+        s.StudentName AS StudentName,
+        SUM(c.Credit) AS TotalCompletedCredits;
+    '''
+
+    with driver.session() as session:
+        result = session.run(query, {'student_id': student_id})
+        credits = [dict(record) for record in result]
+        return jsonify(credits)
 
 # Custom queries
 @app.route('/api/custom-query', methods=['POST'])
