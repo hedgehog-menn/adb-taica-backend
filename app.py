@@ -363,6 +363,89 @@ def get_exam_schedule():
         exams = [dict(record) for record in result]
         return jsonify(exams)
 
+# Average Student's GPA by Region
+@app.route('/api/students-gpa-by-region')
+def get_students_gpa_by_region():
+    course_id = request.args.get('course_id', '')
+    semester_id = request.args.get('semester_id', '')
+    
+    try:
+        regions = load_regions()
+        course_info = {}
+        
+        match_clause = """
+        MATCH (s:Student)-[:ENROLLED_IN]->(e:Enrollment)
+        """
+        
+        if semester_id:
+            match_clause += "MATCH (e)-[:FOR]->(semester:Semester) "
+            
+        if course_id:
+            match_clause += "MATCH (e)-[:FOR]->(c:MasterCourse) "
+            
+        where_clause = "WHERE e.StandardizedGPA IS NOT NULL "
+        
+        if semester_id:
+            where_clause += "AND semester.SemesterID = $semester_id "
+            
+        if course_id:
+            where_clause += "AND c.CourseID = $course_id "
+            return_clause = "RETURN s.geoPoint as point, e.StandardizedGPA as gpa, c.CourseID as courseId, c.CourseName as courseName"
+        else:
+            return_clause = "RETURN s.geoPoint as point, e.StandardizedGPA as gpa"
+            
+        query = match_clause + where_clause + return_clause
+
+        with driver.session() as session:
+            result = session.run(query, {'course_id': course_id, 'semester_id': semester_id})
+            
+            gpa_sums = {name: 0.0 for name in regions.keys()}
+            student_counts = {name: 0 for name in regions.keys()}
+
+            for record in result:
+                point_data = record["point"]
+                gpa = record["gpa"]
+                
+                if course_id and not course_info:
+                    course_info = {
+                        'courseId': record["courseId"],
+                        'courseName': record["courseName"]
+                    }
+                
+                if point_data and gpa:
+                    try:
+                        coords = str(point_data).replace('POINT(', '').replace(')', '').split()
+                        pt = Point(float(coords[0]), float(coords[1]))
+
+                        for region_name, region_shape in regions.items():
+                            if region_shape.contains(pt):
+                                gpa_sums[region_name] += float(gpa)
+                                student_counts[region_name] += 1
+                                break
+                    except Exception as e:
+                        print(f"Point error: {e}, point: {point_data}")
+                        continue
+
+            avg_gpas = {
+                region: round(gpa_sums[region] / student_counts[region], 2) 
+                if student_counts[region] > 0 else 0 
+                for region in regions.keys()
+            }
+
+            response = {
+                'averageGPA': avg_gpas,
+                'studentCounts': student_counts
+            }
+            
+            if course_info:
+                response['courseInfo'] = course_info
+
+            return jsonify(response)
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # Custom queries
 @app.route('/api/custom-query', methods=['POST'])
 def execute_custom_query():
