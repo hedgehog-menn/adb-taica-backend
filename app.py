@@ -446,6 +446,62 @@ def get_students_gpa_by_region():
         print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+# Student's Certification Check
+@app.route('/api/student-certificates')
+def get_student_certificates():
+    student_id = request.args.get('id')
+    issue_date = request.args.get('date')
+
+    query = '''
+    MATCH (s:Student)
+    WHERE s.StudentID = $student_id OR $student_id IS NULL
+    MATCH (s)-[:RECEIVES]->(c:Certificate)-[:FOR]->(p:Program)  
+    WHERE toString(c.IssuedDate) = $issue_date OR $issue_date IS NULL
+    RETURN 
+        s.StudentID AS StudentID,
+        s.StudentName AS StudentName, 
+        c.CertificateName AS CertificateName,
+        toString(c.IssuedDate) AS IssuedDate,
+        p.ProgramName AS ProgramName
+    ORDER BY s.StudentID, c.IssuedDate DESC;
+    '''
+
+    with driver.session() as session:
+        result = session.run(query, {
+            'student_id': student_id,
+            'issue_date': issue_date
+        })
+        certificates = [dict(record) for record in result]
+        return jsonify(certificates)
+
+@app.route('/api/programs')
+def get_programs():
+    program_id = request.args.get('program_id')
+    program_name = request.args.get('program_name')
+
+    query = '''
+    MATCH (mc:MasterCourse)-[:APPROVED_BY]->(a:Approval)-[:APPROVED_FOR]->(p:Program)
+    WHERE 
+        (p.ProgramID = $program_id OR $program_id IS NULL) AND
+        (p.ProgramName CONTAINS $program_name OR $program_name IS NULL)
+    RETURN 
+        mc.CourseName AS CourseName,
+        a.ApprovalID AS ApprovalID,
+        a.CentralOfficeApproval AS CentralApproval,
+        a.CommitteeApproval AS CommitteeApproval, 
+        p.ProgramID AS ProgramID,
+        p.ProgramName AS ProgramName
+    ORDER BY p.ProgramID, mc.CourseName;
+    '''
+
+    with driver.session() as session:
+        result = session.run(query, {
+            'program_id': program_id,
+            'program_name': program_name
+        })
+        courses = [dict(record) for record in result]
+        return jsonify(courses)
+
 # Custom queries
 @app.route('/api/custom-query', methods=['POST'])
 def execute_custom_query():
